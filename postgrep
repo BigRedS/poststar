@@ -1,0 +1,7 @@
+#! /bin/bash
+
+thing=$1
+id=$2
+
+postcat -q $id | grep $thing
+

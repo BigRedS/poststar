@@ -1,0 +1,6 @@
+#! /bin/bash
+
+thing=$1
+
+grep -alir "$thing" /var/spool/postfix/active  /var/spool/postfix/bounce  /var/spool/postfix/corrupt  /var/spool/postfix/defer  /var/spool/postfix/deferred | awk -F '/' '{print $NF}'
+

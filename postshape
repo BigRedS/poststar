@@ -1,0 +1,77 @@
+#! /usr/bin/perl
+
+# Like qshape, but useful :)
+#
+# postshape just iterates through all the files in the 
+# postfix queue (discovered with `postqueue -p`) and 
+# prints a list of stats to stdout.
+#
+# Avi 2014-10
+
+use strict;
+
+my $postcat = "/usr/sbin/postcat -q";
+my $postqueue = "/usr/sbin/postqueue -p 2>&1";
+
+my $stats = {};
+my $count = 0;
+
+foreach(`$postqueue`){
+	if ($_ =~ m/^([A-Z0-9]+)/g){
+		my $id = $1;
+		my @message = `$postcat $id 2>&1`;
+		next if $? != 0;
+		my $in_message = undef;
+		print "Reading message $id\r";
+		$count++;
+		foreach my $line (@message){
+			# Don't bother with the body:
+			last if ($line =~ m/^$/);
+			if($_ =~ m/^\*\*\* MESSAGE CONTENTS /){
+				$in_message = 1;
+			}
+			if($line =~ m/^To: (\S+)@(\S+)/){
+				my $address = lc($1.'@'.$2);
+				my $domain  = lc($2);
+				$stats->{'recipient_address'}->{$address}++;
+				$stats->{'recipient_domain'}->{$domain}++;
+			}elsif($line =~ m/Subject: (.+)$/){
+				$stats->{'subject_line'}->{$1}++;
+			}elsif($line =~ m/X-PHP-Originating-Script: (\d+):(.+)$/){
+				$stats->{php_script}->{$2}++;
+			}elsif($line =~ m/From: (.+)$/){
+				my $from = lc($1);
+				$stats->{'from'}->{$1}++;
+				if($from =~ m/"(.+)"\s+<(\S+)>\s*$/){
+					my $address = $2;
+					$stats->{'from_address'}->{$address}++;
+					if($address =~ m/@(\S+)$/){
+						$stats->{'from_domain'}->{$1}++;
+					}
+				}
+			}
+		}
+	}
+}
+print "\nRead $count messages\n";
+print "Most popular recipient domains:\n";
+print_stats($stats->{'recipient_domain'});
+print "Most popular from addresses:\n";
+print_stats($stats->{'from_address'});
+print "Most popular subject lines:\n";
+print_stats($stats->{'subject_line'});
+print "Most popular from domains:\n";
+print_stats($stats->{'from_domain'});
+print "Most popular PHP scripts\n";
+print_stats($stats->{'php_script'});
+sub print_stats{
+	my $hashref = shift;
+	my $maxlines = 10;
+	my @sorted_keys = my @keys = sort { $hashref->{$b} <=> $hashref->{$a} } keys(%$hashref);
+	my $count = 0;
+	foreach(@sorted_keys){
+		printf("  %-8d %s\n", $hashref->{$_}, $_);
+		$count++;
+		if($maxlines > 0 && $count > $maxlines){ last; }
+	}
+}
